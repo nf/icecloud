@@ -31,6 +31,8 @@ type Icecast struct {
 }
 
 type Server struct {
+	Name     string
+
 	Kind     string // "master" or "slave"
 	Location string // to be translated through the Locations map
 
@@ -54,13 +56,19 @@ func (s *Server) Region() aws.Region {
 func (s *Server) String() string {
 	a := fmt.Sprintf("%s %s", s.Kind, s.Location)
 	if s.Instance != nil {
-		a += fmt.Sprintf(" (%s) (%s) (%s)",
+		a += fmt.Sprintf(" (%s) (%s)",
 			s.Instance.InstanceId,
 			s.Instance.DNSName,
-			s.Instance.PrivateDNSName,
 		)
 	}
 	return a
+}
+
+func (c *Config) ServerURL(s *Server) string {
+	if s.Instance == nil || c.Icecast == nil {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d/", s.Instance.DNSName, c.Icecast.ListenPort)
 }
 
 var Locations = map[string]aws.Region{
@@ -265,13 +273,47 @@ func (c *Config) sshCommand(s *Server, command string, stdin io.Reader) os.Error
 	return err
 }
 
+func (c *Config) Playlist(mount []string) os.Error {
+	for _, m := range mount {
+		if err := c.writePlaylist(m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Config) writePlaylist(mount string) os.Error {
+	for i, s := range c.Server {
+		if s.Kind == "master" {
+			continue
+		}
+		fn := fmt.Sprintf("%s-%s.m3u", mount, s.Name)
+		f, err := os.Create(fn)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(f, "%s%s\n", c.ServerURL(s), mount)
+		for j, s := range c.Server {
+			if s.Kind == "master" || i == j {
+				continue
+			}
+			fmt.Fprintf(f, "%s%s\n", c.ServerURL(s), mount)
+		}
+		f.Close()
+	}
+	return nil
+}
+
 func main() {
+	stateFile := flag.String("state", "state.json", "file in which to store system state")
 	flag.Parse()
 	verb := flag.Arg(0)
 
-	configFile := "config.json"
+	configFile := flag.Arg(1)
 	if verb != "run" {
-		configFile = "state.json"
+		configFile = *stateFile
+	} else if configFile == "" {
+		log.Fatal("you must specify a config file")
 	}
 	config, err := ReadConfig(configFile)
 	if err != nil {
@@ -283,6 +325,8 @@ func main() {
 		err = config.Run()
 	case "setup":
 		err = config.Setup()
+	case "playlist":
+		err = config.Playlist(flag.Args()[1:])
 	case "shutdown":
 		err = config.Shutdown()
 	default:

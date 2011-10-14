@@ -60,7 +60,7 @@ cat > etc_icecast2_icecast.xml <<EOF
     </listen-socket>
 
 {{if .Master}}
-    <master-server>{{.Master.Instance.PrivateDNSName}}</master-server>
+    <master-server>{{.Master.Instance.DNSName}}</master-server>
     <master-server-port>{{.Icecast.ListenPort}}</master-server-port>
     <master-update-interval>5</master-update-interval>
     <master-password>{{.Icecast.RelayPassword}}</master-password>
