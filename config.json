@@ -1,0 +1,37 @@
+{
+	"KeyName": "icecloud-key",
+	"Server": [
+		{
+			"Kind": "master",
+			"Location": "Tokyo",
+			"Username": "ubuntu",
+			"ImageID":  "ami-40b40041",
+			"Size":     "m1.small",
+			"NumClients": 10, "NumSources": 10
+		},
+		{
+			"Name": "tokyo",
+			"Kind": "slave",
+			"Location": "Tokyo",
+			"Username": "ubuntu",
+			"ImageID":  "ami-40b40041",
+			"Size":     "m1.small",
+			"NumClients": 500, "NumSources": 10
+		},
+		{
+			"Name": "eastcoast",
+			"Kind": "slave",
+			"Location": "USEast",
+			"Username": "ubuntu",
+			"ImageID":  "ami-6936fb00",
+			"Size":     "m1.small",
+			"NumClients": 500, "NumSources": 10
+		}
+	],
+	"Icecast": {
+		"SourcePassword": "abcd",
+		"RelayPassword": "efgh",
+		"AdminPassword": "ijkl",
+		"ListenPort": 8000
+	}
+}
