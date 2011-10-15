@@ -31,7 +31,7 @@ type Icecast struct {
 }
 
 type Server struct {
-	Name     string
+	Name string
 
 	Kind     string // "master" or "slave"
 	Location string // to be translated through the Locations map
@@ -111,6 +111,7 @@ func (c *Config) Run() os.Error {
 	for _, s := range c.Server {
 		if err := c.runInstance(s); err != nil {
 			log.Println("run:", err)
+			log.Println("trying to shut down")
 			return c.Shutdown()
 		}
 	}
@@ -183,7 +184,6 @@ func (c *Config) getInstance(s *Server) (*ec2.Instance, os.Error) {
 }
 
 func (c *Config) Shutdown() os.Error {
-	log.Println("Shutting down")
 	ok := true
 	for _, s := range c.Server {
 		if s.Instance == nil {
@@ -307,13 +307,25 @@ func (c *Config) writePlaylist(mount string) os.Error {
 func main() {
 	stateFile := flag.String("state", "state.json", "file in which to store system state")
 	flag.Parse()
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: %v run configfile\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %v setup\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %v playlist\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %v shutdown\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "flags:")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
 	verb := flag.Arg(0)
+	if verb == "" {
+		flag.Usage()
+	}
 
 	configFile := flag.Arg(1)
 	if verb != "run" {
 		configFile = *stateFile
 	} else if configFile == "" {
-		log.Fatal("you must specify a config file")
+		flag.Usage()
 	}
 	config, err := ReadConfig(configFile)
 	if err != nil {
