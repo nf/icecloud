@@ -1,8 +1,10 @@
-Icecloud is a tool for setting up Icecast streaming networks on Amazon EC2
+# Icecloud
+
+Icecloud is a tool for setting up Icecast streaming networks on Amazon EC2.
 
 It was written by [Andrew Gerrand](mailto:adg@golang.org).
 
-== Setup ==
+## Setup
 
 First, [install Go](http://golang.org/doc/install.html).
 
@@ -10,7 +12,7 @@ Install icecloud:
 
 	goinstall github.com/nf/icecloud
 
-== Usage ==
+## Usage
 
 Configure icecloud by copying `config.json` from the source directory to
 a working directory somewhere.
@@ -30,4 +32,9 @@ Generate m3u playlist files for various mount points:
 Shut down the VM instances:
 
 	icecloud shutdown
+
+## Acknowledgements
+
+Thanks to Gustavo Niemeyer for his superb
+[goamz](https://wiki.ubuntu.com/goamz) library for talking to Amazon AWS.
 
