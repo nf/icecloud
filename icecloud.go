@@ -100,7 +100,7 @@ func ReadConfig(filename string) (*Config, os.Error) {
 }
 
 func (c *Config) Write(filename string) os.Error {
-	b, err := json.Marshal(c)
+	b, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := config.Write("state.json"); err != nil {
+	if err := config.Write(*stateFile); err != nil {
 		log.Fatal(err)
 	}
 }
