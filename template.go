@@ -118,3 +118,19 @@ sudo chmod 660 /etc/icecast2/icecast.xml
 
 sudo /etc/init.d/icecast2 restart
 `
+
+var m3uTmpl = template.Must(template.New("m3u").Parse(
+	"{{range .}}{{.}}\n{{end}}"))
+
+var plsTmpl = template.Must(template.New("m3u").Funcs(template.FuncMap{
+	"idx": func(i int) int { return i + 1 },
+}).Parse(`
+[playlist]
+{{range $i, $s := .}}
+File{{idx $i}}={{$s}}
+Title{{idx $i}}=Server {{idx $i}}
+Length{{idx $i}}=-1
+{{end}}
+NumberOfEntries={{len .}}
+Version=2
+`))

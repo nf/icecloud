@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"template"
 )
 
 type Config struct {
@@ -275,29 +276,37 @@ func (c *Config) sshCommand(s *Server, command string, stdin io.Reader) os.Error
 
 func (c *Config) Playlist(mount []string) os.Error {
 	for _, m := range mount {
-		if err := c.writePlaylist(m); err != nil {
+		if err := c.writePlaylist(m, "m3u", m3uTmpl); err != nil {
+			return err
+		}
+		if err := c.writePlaylist(m, "pls", plsTmpl); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Config) writePlaylist(mount string) os.Error {
+func (c *Config) writePlaylist(mount, ext string, t *template.Template) os.Error {
 	for i, s := range c.Server {
 		if s.Kind == "master" {
 			continue
 		}
-		fn := fmt.Sprintf("%s-%s.m3u", mount, s.Name)
-		f, err := os.Create(fn)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(f, "%s%s\n", c.ServerURL(s), mount)
+		url := fmt.Sprintf("%s%s", c.ServerURL(s), mount)
+		servers := []string{url}
 		for j, s := range c.Server {
 			if s.Kind == "master" || i == j {
 				continue
 			}
-			fmt.Fprintf(f, "%s%s\n", c.ServerURL(s), mount)
+			url := fmt.Sprintf("%s%s", c.ServerURL(s), mount)
+			servers = append(servers, url)
+		}
+		name := fmt.Sprintf("%s-%s.%s", mount, s.Name, ext)
+		f, err := os.Create(name)
+		if err != nil {
+			return err
+		}
+		if err := t.Execute(f, servers); err != nil {
+			return err
 		}
 		f.Close()
 	}
