@@ -6,11 +6,11 @@ It was written by [Andrew Gerrand](mailto:adg@golang.org).
 
 ## Setup
 
-First, [install Go](http://golang.org/doc/install.html).
+First, [install Go](http://golang.org/doc/install).
 
 Install icecloud:
 
-	goinstall github.com/nf/icecloud
+	go get github.com/nf/icecloud
 
 ## Usage
 

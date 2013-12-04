@@ -3,11 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-	"template"
+	"text/template"
 )
 
-func SetupTemplate(w io.Writer, icecast *Icecast, server, master *Server) os.Error {
+func SetupTemplate(w io.Writer, icecast *Icecast, server, master *Server) error {
 	err := setupTmpl.Execute(w, struct {
 		Icecast        *Icecast
 		Server, Master *Server

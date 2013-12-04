@@ -2,18 +2,20 @@ package main
 
 import (
 	"bytes"
-	"exec"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"json"
-	"launchpad.net/goamz/aws"
-	"launchpad.net/goamz/ec2"
 	"log"
 	"os"
+	"os/exec"
+	"text/template"
 	"time"
-	"template"
+
+	"launchpad.net/goamz/aws"
+	"launchpad.net/goamz/ec2"
 )
 
 type Config struct {
@@ -80,7 +82,7 @@ var Locations = map[string]aws.Region{
 	"USWest":    aws.USWest,
 }
 
-func ReadConfig(filename string) (*Config, os.Error) {
+func ReadConfig(filename string) (*Config, error) {
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -100,7 +102,7 @@ func ReadConfig(filename string) (*Config, os.Error) {
 	return c, nil
 }
 
-func (c *Config) Write(filename string) os.Error {
+func (c *Config) Write(filename string) error {
 	b, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
 		return err
@@ -108,7 +110,7 @@ func (c *Config) Write(filename string) os.Error {
 	return ioutil.WriteFile(filename, b, 0600)
 }
 
-func (c *Config) Run() os.Error {
+func (c *Config) Run() error {
 	for _, s := range c.Server {
 		if err := c.runInstance(s); err != nil {
 			log.Println("run:", err)
@@ -133,7 +135,7 @@ func (c *Config) Run() os.Error {
 	return nil
 }
 
-func (c *Config) runInstance(s *Server) os.Error {
+func (c *Config) runInstance(s *Server) error {
 	e := ec2.New(c.auth, s.Region())
 	options := &ec2.RunInstances{
 		ImageId:      s.ImageID,
@@ -151,9 +153,9 @@ func (c *Config) runInstance(s *Server) os.Error {
 	return nil
 }
 
-func (c *Config) waitReady(s *Server) os.Error {
-	deadline := time.Seconds() + 120e9 // 2 minute deadline
-	for time.Seconds() < deadline {
+func (c *Config) waitReady(s *Server) error {
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
 		inst, err := c.getInstance(s)
 		if err != nil {
 			return err
@@ -163,10 +165,10 @@ func (c *Config) waitReady(s *Server) os.Error {
 		}
 		time.Sleep(5e9)
 	}
-	return os.NewError("waitReady: server took too long")
+	return errors.New("waitReady: server took too long")
 }
 
-func (c *Config) getInstance(s *Server) (*ec2.Instance, os.Error) {
+func (c *Config) getInstance(s *Server) (*ec2.Instance, error) {
 	e := ec2.New(c.auth, s.Region())
 	instIds := []string{s.Instance.InstanceId}
 	resp, err := e.Instances(instIds, nil)
@@ -184,7 +186,7 @@ func (c *Config) getInstance(s *Server) (*ec2.Instance, os.Error) {
 	return &r.Instances[0], nil
 }
 
-func (c *Config) Shutdown() os.Error {
+func (c *Config) Shutdown() error {
 	ok := true
 	for _, s := range c.Server {
 		if s.Instance == nil {
@@ -199,12 +201,12 @@ func (c *Config) Shutdown() os.Error {
 		}
 	}
 	if !ok {
-		return os.NewError("some instances didn't shut down cleanly")
+		return errors.New("some instances didn't shut down cleanly")
 	}
 	return nil
 }
 
-func (c *Config) Setup() os.Error {
+func (c *Config) Setup() error {
 	ok := make(chan bool)
 	for _, s := range c.Server {
 		go func(s *Server) {
@@ -224,15 +226,15 @@ func (c *Config) Setup() os.Error {
 		allOk = allOk && k
 	}
 	if !allOk {
-		return os.NewError("some instances didn't set up cleanly")
+		return errors.New("some instances didn't set up cleanly")
 	}
 	return nil
 }
 
-func (c *Config) setupInstance(s *Server) os.Error {
+func (c *Config) setupInstance(s *Server) error {
 	// create the setup.sh script
 	stdin := new(bytes.Buffer)
-	var err os.Error
+	var err error
 	if s.Kind == "master" {
 		err = SetupTemplate(stdin, c.Icecast, s, nil)
 	} else {
@@ -244,7 +246,7 @@ func (c *Config) setupInstance(s *Server) os.Error {
 			}
 		}
 		if m == nil {
-			return os.NewError("no master found in config")
+			return errors.New("no master found in config")
 		}
 		err = SetupTemplate(stdin, c.Icecast, s, m)
 	}
@@ -260,9 +262,9 @@ func (c *Config) setupInstance(s *Server) os.Error {
 	return c.sshCommand(s, "bash setup.sh", nil)
 }
 
-func (c *Config) sshCommand(s *Server, command string, stdin io.Reader) os.Error {
+func (c *Config) sshCommand(s *Server, command string, stdin io.Reader) error {
 	if s.Instance == nil {
-		return os.NewError("sshCommand: nil instance")
+		return errors.New("sshCommand: nil instance")
 	}
 	userhost := fmt.Sprintf("%s@%s", s.Username, s.Instance.DNSName)
 	cmd := exec.Command("ssh", "-v", "-o", "StrictHostKeyChecking=no", userhost, command)
@@ -274,7 +276,7 @@ func (c *Config) sshCommand(s *Server, command string, stdin io.Reader) os.Error
 	return err
 }
 
-func (c *Config) Playlist(mount []string) os.Error {
+func (c *Config) Playlist(mount []string) error {
 	for _, m := range mount {
 		if err := c.writePlaylist(m, "m3u", m3uTmpl); err != nil {
 			return err
@@ -286,7 +288,7 @@ func (c *Config) Playlist(mount []string) os.Error {
 	return nil
 }
 
-func (c *Config) writePlaylist(mount, ext string, t *template.Template) os.Error {
+func (c *Config) writePlaylist(mount, ext string, t *template.Template) error {
 	for i, s := range c.Server {
 		if s.Kind == "master" {
 			continue
@@ -351,7 +353,7 @@ func main() {
 	case "shutdown":
 		err = config.Shutdown()
 	default:
-		err = os.NewError("invalid verb")
+		err = errors.New("invalid verb")
 	}
 	if err != nil {
 		log.Fatal(err)
